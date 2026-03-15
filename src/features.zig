@@ -35,13 +35,13 @@ fn hoverNode(n: Node, alloc: std.mem.Allocator) ![]const u8 {
         },
         .type_annot => {
             const t = n.token.value;
-            if (std.mem.eql(u8, t, "int") or std.mem.eql(u8, t, "integer"))
+            if (std.mem.eql(u8, t, "int"))
                 return "**Type** `int`\n\nInteger value (e.g., `42`, `-100`)";
-            if (std.mem.eql(u8, t, "float") or std.mem.eql(u8, t, "double"))
+            if (std.mem.eql(u8, t, "float"))
                 return "**Type** `float`\n\nFloating-point value (e.g., `3.14`)";
-            if (std.mem.eql(u8, t, "str") or std.mem.eql(u8, t, "string"))
+            if (std.mem.eql(u8, t, "str"))
                 return "**Type** `str`\n\nString value (quoted or unquoted)";
-            if (std.mem.eql(u8, t, "bool") or std.mem.eql(u8, t, "boolean"))
+            if (std.mem.eql(u8, t, "bool"))
                 return "**Type** `bool`\n\nBoolean: `true` or `false`";
             return try std.fmt.allocPrint(alloc, "**Type** `{s}`", .{t});
         },
@@ -116,10 +116,6 @@ fn typeCompletions(alloc: std.mem.Allocator) ![]CompItem {
         .{ .label = "float",   .kind = 14, .detail = "Float type",             .insert_text = "float" },
         .{ .label = "str",     .kind = 14, .detail = "String type",            .insert_text = "str" },
         .{ .label = "bool",    .kind = 14, .detail = "Boolean type",           .insert_text = "bool" },
-        .{ .label = "string",  .kind = 14, .detail = "String type (alias)",    .insert_text = "string" },
-        .{ .label = "integer", .kind = 14, .detail = "Integer type (alias)",   .insert_text = "integer" },
-        .{ .label = "double",  .kind = 14, .detail = "Float type (alias)",     .insert_text = "double" },
-        .{ .label = "boolean", .kind = 14, .detail = "Boolean type (alias)",   .insert_text = "boolean" },
         .{ .label = "{...}",   .kind = 14, .detail = "Nested object schema",   .insert_text = "{$1}" },
         .{ .label = "[...]",   .kind = 14, .detail = "Array type",             .insert_text = "[$1]" },
     };

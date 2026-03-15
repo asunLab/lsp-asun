@@ -187,6 +187,23 @@ test "parser: legacy map type annotation rejected" {
     try std.testing.expect(result.diags.len > 0);
 }
 
+test "parser: schema type aliases rejected" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    for ([_][]const u8{
+        "{id@integer,name@str}:(1,Alice)",
+        "{id@int,name@string}:(1,Alice)",
+        "{score@double}:(3.5)",
+        "{active@boolean}:(true)",
+        "{tags@[string]}:([Alice])",
+    }) |src| {
+        var result = try parser.parse(src, arena.allocator());
+        defer result.deinit();
+        try std.testing.expect(result.diags.len > 0);
+    }
+}
+
 test "parser: tuple values" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

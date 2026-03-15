@@ -17,7 +17,7 @@ pub const TokKind = enum(u8) {
     at,        // @
     comma,     // ,
     ident,     // field name
-    type_hint, // int str float bool (and aliases)
+    type_hint, // int str float bool
     string,    // "..."
     number,    // integer or float literal
     bool_val,  // true / false
@@ -175,10 +175,10 @@ pub const Lexer = struct {
             return self.tok(.err, start, sl, sc);
         }
         const word = self.src[start..self.pos];
-        if (std.mem.eql(u8, word, "int") or std.mem.eql(u8, word, "integer") or
-            std.mem.eql(u8, word, "float") or std.mem.eql(u8, word, "double") or
-            std.mem.eql(u8, word, "str") or std.mem.eql(u8, word, "string") or
-            std.mem.eql(u8, word, "bool") or std.mem.eql(u8, word, "boolean"))
+        if (std.mem.eql(u8, word, "int") or
+            std.mem.eql(u8, word, "float") or
+            std.mem.eql(u8, word, "str") or
+            std.mem.eql(u8, word, "bool"))
         {
             return self.tok(.type_hint, start, sl, sc);
         }
