@@ -154,12 +154,167 @@ const MAX_LINE = 100;
 const INDENT = "    ";
 const EXPAND_ALL_CONTAINERS = true;
 
+const CommentAttach = struct {
+    anchor: u32,
+    trailing: bool,
+    text: []const u8,
+    used: bool = false,
+};
+
+const CommentCtx = struct {
+    items: []CommentAttach,
+
+    fn deinit(self: *CommentCtx, alloc: std.mem.Allocator) void {
+        alloc.free(self.items);
+    }
+};
+
 pub fn format(src: []const u8, alloc: std.mem.Allocator) ![]const u8 {
     var result = try parser.parse(src, alloc);
     defer result.deinit();
+    var comments = try collectComments(src, alloc);
+    defer comments.deinit(alloc);
     var sb = ArrayList(u8).init(alloc);
-    try formatNode(result.root, 0, &sb);
+    try formatNode(result.root, 0, &sb, &comments);
     return sb.toOwnedSlice();
+}
+
+fn collectComments(src: []const u8, alloc: std.mem.Allocator) !CommentCtx {
+    var lx = lex.Lexer.init(src);
+    const toks = try lx.all(alloc);
+    defer alloc.free(toks);
+
+    var items = ArrayList(CommentAttach).init(alloc);
+    for (toks, 0..) |tok, i| {
+        if (tok.kind != .comment) continue;
+
+        var prev: ?Token = null;
+        var j = i;
+        while (j > 0) {
+            j -= 1;
+            const t = toks[j];
+            if (t.kind == .newline) break;
+            if (t.kind == .comment or t.kind == .eof) continue;
+            if (!canOwnTrailingComment(t.kind)) continue;
+            prev = t;
+            break;
+        }
+        if (prev) |p| {
+            try items.append(.{ .anchor = p.end_off, .trailing = true, .text = tok.value });
+            continue;
+        }
+
+        var next: ?Token = null;
+        var k = i + 1;
+        while (k < toks.len) : (k += 1) {
+            const t = toks[k];
+            if (t.kind == .comment or t.kind == .newline or t.kind == .eof) continue;
+            next = t;
+            break;
+        }
+        if (next) |n| {
+            try items.append(.{ .anchor = n.offset, .trailing = false, .text = tok.value });
+        }
+    }
+    return .{ .items = try items.toOwnedSlice() };
+}
+
+fn canOwnTrailingComment(kind: TK) bool {
+    return switch (kind) {
+        .ident, .type_hint, .string, .number, .bool_val, .plain_str, .rbrace, .rparen, .rbracket => true,
+        else => false,
+    };
+}
+
+fn emitLeadingComments(anchor: u32, lvl: usize, sb: *ArrayList(u8), comments: *CommentCtx) !void {
+    const w = sb.writer();
+    for (comments.items) |*item| {
+        if (item.used or item.trailing or item.anchor != anchor) continue;
+        try indent(lvl, sb);
+        try w.writeAll(item.text);
+        try w.writeAll("\n");
+        item.used = true;
+    }
+}
+
+fn emitTrailingComments(anchor: u32, sb: *ArrayList(u8), comments: *CommentCtx) !void {
+    const w = sb.writer();
+    for (comments.items) |*item| {
+        if (item.used or !item.trailing or item.anchor != anchor) continue;
+        try w.writeAll(" ");
+        try w.writeAll(item.text);
+        item.used = true;
+    }
+}
+
+fn lastTokenEnd(n: Node) u32 {
+    return switch (n.kind) {
+        .field, .schema, .tuple, .array, .array_schema =>
+            if (n.children.len > 0) lastTokenEnd(n.children[n.children.len - 1]) else n.token.end_off,
+        else => n.token.end_off,
+    };
+}
+
+fn formatInline(n: Node, sb: *ArrayList(u8), comments: *CommentCtx) !void {
+    const w = sb.writer();
+    switch (n.kind) {
+        .schema => {
+            try w.writeAll("{");
+            for (n.children, 0..) |c, i| {
+                if (i > 0) try w.writeAll(", ");
+                try formatInline(c, sb, comments);
+            }
+            try w.writeAll("}");
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
+        },
+        .field => {
+            try w.writeAll(n.token.value);
+            if (n.children.len > 0) {
+                const c = n.children[0];
+                if (c.kind == .type_annot) {
+                    try w.print("@{s}", .{c.token.value});
+                } else if (c.kind == .schema) {
+                    try w.writeAll("@");
+                    try formatInline(c, sb, comments);
+                } else if (c.kind == .array_schema) {
+                    try w.writeAll("@[");
+                    if (c.children.len > 0) try formatInline(c.children[0], sb, comments);
+                    try w.writeAll("]");
+                }
+            }
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
+        },
+        .tuple => {
+            try w.writeAll("(");
+            for (n.children, 0..) |c, i| {
+                if (i > 0) try w.writeAll(", ");
+                try formatInline(c, sb, comments);
+            }
+            try w.writeAll(")");
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
+        },
+        .array => {
+            try w.writeAll("[");
+            for (n.children, 0..) |c, i| {
+                if (i > 0) try w.writeAll(", ");
+                try formatInline(c, sb, comments);
+            }
+            try w.writeAll("]");
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
+        },
+        .value => {
+            try w.writeAll(std.mem.trim(u8, n.token.value, " \t"));
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
+        },
+        .type_annot => try w.writeAll(n.token.value),
+        .array_schema => {
+            try w.writeAll("[");
+            if (n.children.len > 0) try formatInline(n.children[0], sb, comments);
+            try w.writeAll("]");
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
+        },
+        else => {},
+    }
 }
 
 fn nodeWidth(n: Node) isize {
@@ -227,61 +382,7 @@ fn indent(level: usize, sb: *ArrayList(u8)) !void {
     while (i < level) : (i += 1) try sb.appendSlice(INDENT);
 }
 
-fn formatInline(n: Node, sb: *ArrayList(u8)) !void {
-    const w = sb.writer();
-    switch (n.kind) {
-        .schema => {
-            try w.writeAll("{");
-            for (n.children, 0..) |c, i| {
-                if (i > 0) try w.writeAll(", ");
-                try formatInline(c, sb);
-            }
-            try w.writeAll("}");
-        },
-        .field => {
-            try w.writeAll(n.token.value);
-            if (n.children.len > 0) {
-                const c = n.children[0];
-                if (c.kind == .type_annot) {
-                    try w.print("@{s}", .{c.token.value});
-                } else if (c.kind == .schema) {
-                    try w.writeAll("@");
-                    try formatInline(c, sb);
-                } else if (c.kind == .array_schema) {
-                    try w.writeAll("@[");
-                    if (c.children.len > 0) try formatInline(c.children[0], sb);
-                    try w.writeAll("]");
-                }
-            }
-        },
-        .tuple => {
-            try w.writeAll("(");
-            for (n.children, 0..) |c, i| {
-                if (i > 0) try w.writeAll(", ");
-                try formatInline(c, sb);
-            }
-            try w.writeAll(")");
-        },
-        .array => {
-            try w.writeAll("[");
-            for (n.children, 0..) |c, i| {
-                if (i > 0) try w.writeAll(", ");
-                try formatInline(c, sb);
-            }
-            try w.writeAll("]");
-        },
-        .value => try w.writeAll(std.mem.trim(u8, n.token.value, " \t")),
-        .type_annot => try w.writeAll(n.token.value),
-        .array_schema => {
-            try w.writeAll("[");
-            if (n.children.len > 0) try formatInline(n.children[0], sb);
-            try w.writeAll("]");
-        },
-        else => {},
-    }
-}
-
-fn formatNode(n: Node, lvl: usize, sb: *ArrayList(u8)) !void {
+fn formatNode(n: Node, lvl: usize, sb: *ArrayList(u8), comments: *CommentCtx) !void {
     const w = sb.writer();
     switch (n.kind) {
         .document => {
@@ -289,40 +390,45 @@ fn formatNode(n: Node, lvl: usize, sb: *ArrayList(u8)) !void {
             const first = n.children[0];
             const has_schema = (first.kind == .schema or first.kind == .array_schema);
             if (has_schema) {
-                // Emit schema header (array_schema wraps inner schema in [...])
+                try emitLeadingComments(first.token.offset, lvl, sb, comments);
                 if (first.kind == .array_schema) {
                     try w.writeAll("[");
-                    if (first.children.len > 0) try formatNode(first.children[0], lvl, sb);
+                    if (first.children.len > 0) try formatNode(first.children[0], lvl, sb, comments);
                     try w.writeAll("]");
                 } else {
-                    try formatNode(first, lvl, sb);
+                    try formatNode(first, lvl, sb, comments);
                 }
                 try w.writeAll(":");
-                // Emit data rows separated by commas
                 const rows = n.children[1..];
                 for (rows, 0..) |c, ri| {
                     if (ri > 0) try w.writeAll(",");
                     try w.writeAll("\n");
-                    try formatNode(c, lvl, sb);
+                    try emitLeadingComments(c.token.offset, lvl, sb, comments);
+                    try formatNode(c, lvl, sb, comments);
                 }
                 try w.writeAll("\n");
             } else {
-                for (n.children) |c| try formatNode(c, lvl, sb);
+                for (n.children) |c| {
+                    try emitLeadingComments(c.token.offset, lvl, sb, comments);
+                    try formatNode(c, lvl, sb, comments);
+                }
             }
         },
         .schema => {
             if (!shouldExpand(n, lvl)) {
-                try formatInline(n, sb);
+                try formatInline(n, sb, comments);
             } else {
                 try w.writeAll("{\n");
                 for (n.children, 0..) |c, i| {
+                    try emitLeadingComments(c.token.offset, lvl + 1, sb, comments);
                     try indent(lvl + 1, sb);
-                    try formatNode(c, lvl + 1, sb);
+                    try formatNode(c, lvl + 1, sb, comments);
                     if (i < n.children.len - 1) try w.writeAll(",");
                     try w.writeAll("\n");
                 }
                 try indent(lvl, sb);
                 try w.writeAll("}");
+                try emitTrailingComments(lastTokenEnd(n), sb, comments);
             }
         },
         .field => {
@@ -333,50 +439,59 @@ fn formatNode(n: Node, lvl: usize, sb: *ArrayList(u8)) !void {
                     try w.print("@{s}", .{c.token.value});
                 } else if (c.kind == .schema) {
                     try w.writeAll("@");
-                    try formatNode(c, lvl, sb);
+                    try formatNode(c, lvl, sb, comments);
                 } else if (c.kind == .array_schema) {
                     try w.writeAll("@[");
-                    if (c.children.len > 0) try formatNode(c.children[0], lvl, sb);
+                    if (c.children.len > 0) try formatNode(c.children[0], lvl, sb, comments);
                     try w.writeAll("]");
                 }
             }
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
         },
         .tuple => {
             if (!shouldExpand(n, lvl)) {
-                try formatInline(n, sb);
+                try formatInline(n, sb, comments);
             } else {
                 try w.writeAll("(\n");
                 for (n.children, 0..) |c, i| {
+                    try emitLeadingComments(c.token.offset, lvl + 1, sb, comments);
                     try indent(lvl + 1, sb);
-                    try formatNode(c, lvl + 1, sb);
+                    try formatNode(c, lvl + 1, sb, comments);
                     if (i < n.children.len - 1) try w.writeAll(",");
                     try w.writeAll("\n");
                 }
                 try indent(lvl, sb);
                 try w.writeAll(")");
+                try emitTrailingComments(lastTokenEnd(n), sb, comments);
             }
         },
         .array => {
             if (!shouldExpand(n, lvl)) {
-                try formatInline(n, sb);
+                try formatInline(n, sb, comments);
             } else {
                 try w.writeAll("[\n");
                 for (n.children, 0..) |c, i| {
+                    try emitLeadingComments(c.token.offset, lvl + 1, sb, comments);
                     try indent(lvl + 1, sb);
-                    try formatNode(c, lvl + 1, sb);
+                    try formatNode(c, lvl + 1, sb, comments);
                     if (i < n.children.len - 1) try w.writeAll(",");
                     try w.writeAll("\n");
                 }
                 try indent(lvl, sb);
                 try w.writeAll("]");
+                try emitTrailingComments(lastTokenEnd(n), sb, comments);
             }
         },
         .array_schema => {
             try w.writeAll("[");
-            if (n.children.len > 0) try formatNode(n.children[0], lvl, sb);
+            if (n.children.len > 0) try formatNode(n.children[0], lvl, sb, comments);
             try w.writeAll("]");
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
         },
-        .value => try w.writeAll(std.mem.trim(u8, n.token.value, " \t")),
+        .value => {
+            try w.writeAll(std.mem.trim(u8, n.token.value, " \t"));
+            try emitTrailingComments(lastTokenEnd(n), sb, comments);
+        },
         .type_annot => try w.writeAll(n.token.value),
         else => {},
     }

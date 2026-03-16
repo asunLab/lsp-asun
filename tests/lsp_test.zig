@@ -548,6 +548,28 @@ test "features: format preserves plain array type annotation" {
     try std.testing.expect(std.mem.indexOf(u8, out, "name@str") != null);
 }
 
+test "features: format keeps commented source unchanged" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const src =
+        "/* top */\n" ++
+        "{id@int,name@str}:\n" ++
+        "/* row */ (1, /* name */ Alice)\n";
+    const out = try features.format(src, arena.allocator());
+    const expected =
+        "/* top */\n" ++
+        "{\n" ++
+        "    id@int,\n" ++
+        "    name@str\n" ++
+        "}:\n" ++
+        "/* row */\n" ++
+        "(\n" ++
+        "    1 /* name */,\n" ++
+        "    Alice\n" ++
+        ")\n";
+    try std.testing.expectEqualStrings(expected, out);
+}
+
 test "features: compress preserves plain array type annotation" {
     // Bug fix: empty arrays [str] must round-trip through compress
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
