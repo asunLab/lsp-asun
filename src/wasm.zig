@@ -3,7 +3,7 @@
 
 const std = @import("std");
 const features = @import("features.zig");
-const parser   = @import("parser.zig");
+const parser = @import("parser.zig");
 
 // ── Bump allocator — simple for WASM ─────────────────────────────────────────
 
@@ -15,7 +15,7 @@ fn alloc() std.mem.Allocator {
 }
 
 // Reset the bump allocator between calls.
-export fn ason_reset() void {
+export fn asun_reset() void {
     fba.reset();
 }
 
@@ -30,14 +30,14 @@ fn writeOut(s: []const u8) usize {
     return n;
 }
 
-export fn ason_out_ptr() [*]u8 {
+export fn asun_out_ptr() [*]u8 {
     return &out_buf;
 }
 
 // ── Validate ──────────────────────────────────────────────────────────────────
 
 /// Returns number of diagnostics (0 = valid).
-export fn ason_validate(src_ptr: [*]const u8, src_len: usize) usize {
+export fn asun_validate(src_ptr: [*]const u8, src_len: usize) usize {
     const src = src_ptr[0..src_len];
     var result = parser.parse(src, alloc()) catch return 1;
     defer result.deinit();
@@ -46,8 +46,8 @@ export fn ason_validate(src_ptr: [*]const u8, src_len: usize) usize {
 
 // ── Format ────────────────────────────────────────────────────────────────────
 
-/// Formats ASON, writes to out_buf, returns length.
-export fn ason_format(src_ptr: [*]const u8, src_len: usize) usize {
+/// Formats ASUN, writes to out_buf, returns length.
+export fn asun_format(src_ptr: [*]const u8, src_len: usize) usize {
     const src = src_ptr[0..src_len];
     const out = features.format(src, alloc()) catch return 0;
     return writeOut(out);
@@ -55,31 +55,31 @@ export fn ason_format(src_ptr: [*]const u8, src_len: usize) usize {
 
 // ── Compress ──────────────────────────────────────────────────────────────────
 
-export fn ason_compress(src_ptr: [*]const u8, src_len: usize) usize {
+export fn asun_compress(src_ptr: [*]const u8, src_len: usize) usize {
     const src = src_ptr[0..src_len];
     const out = features.compress(src, alloc()) catch return 0;
     return writeOut(out);
 }
 
-// ── ASON → JSON ────────────────────────────────────────────────────────────────
+// ── ASUN → JSON ────────────────────────────────────────────────────────────────
 
-export fn ason_to_json(src_ptr: [*]const u8, src_len: usize) usize {
+export fn asun_to_json(src_ptr: [*]const u8, src_len: usize) usize {
     const src = src_ptr[0..src_len];
-    const out = features.asonToJson(src, alloc()) catch return 0;
+    const out = features.asunToJson(src, alloc()) catch return 0;
     return writeOut(out);
 }
 
-// ── JSON → ASON ────────────────────────────────────────────────────────────────
+// ── JSON → ASUN ────────────────────────────────────────────────────────────────
 
-export fn ason_from_json(src_ptr: [*]const u8, src_len: usize) usize {
+export fn asun_from_json(src_ptr: [*]const u8, src_len: usize) usize {
     const src = src_ptr[0..src_len];
-    const out = features.jsonToAson(src, alloc()) catch return 0;
+    const out = features.jsonToAsun(src, alloc()) catch return 0;
     return writeOut(out);
 }
 
 // ── Complete (simple — returns newline-separated labels) ──────────────────────
 
-export fn ason_complete(src_ptr: [*]const u8, src_len: usize, line: u32, col: u32) usize {
+export fn asun_complete(src_ptr: [*]const u8, src_len: usize, line: u32, col: u32) usize {
     const src = src_ptr[0..src_len];
     var result = parser.parse(src, alloc()) catch return 0;
     defer result.deinit();

@@ -3,8 +3,8 @@
 const std = @import("std");
 
 // Import sub-modules directly (build.zig grants access via addImport)
-const lexer    = @import("lexer");
-const parser   = @import("parser");
+const lexer = @import("lexer");
+const parser = @import("parser");
 const features = @import("features");
 
 // ── Lexer tests ───────────────────────────────────────────────────────────────
@@ -50,7 +50,11 @@ test "lexer: number token" {
     const src = "{age@int}:(42)";
     var lx = lexer.Lexer.init(src);
     // skip {, age, @, int, }
-    _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
     _ = lx.next(); // :
     _ = lx.next(); // (
     const t = lx.next();
@@ -61,8 +65,13 @@ test "lexer: number token" {
 test "lexer: boolean token" {
     const src = "{active@bool}:(true)";
     var lx = lexer.Lexer.init(src);
-    _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next();
-    _ = lx.next(); _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
     const t = lx.next();
     try std.testing.expectEqual(lexer.TokKind.bool_val, t.kind);
 }
@@ -70,8 +79,13 @@ test "lexer: boolean token" {
 test "lexer: string token" {
     const src = "{desc@str}:(\"hello world\")";
     var lx = lexer.Lexer.init(src);
-    _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next();
-    _ = lx.next(); _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
     const t = lx.next();
     try std.testing.expectEqual(lexer.TokKind.string, t.kind);
 }
@@ -85,7 +99,10 @@ test "lexer: comment skipped via all()" {
     // comment present in raw stream but not in parser (parser skips; here we just count)
     var has_comment = false;
     for (toks) |t| {
-        if (t.kind == .comment) { has_comment = true; break; }
+        if (t.kind == .comment) {
+            has_comment = true;
+            break;
+        }
     }
     try std.testing.expect(has_comment);
 }
@@ -102,8 +119,13 @@ test "lexer: at token" {
 test "lexer: negative number" {
     const src = "{x@int}:(-123)";
     var lx = lexer.Lexer.init(src);
-    _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next();
-    _ = lx.next(); _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
     const t = lx.next();
     try std.testing.expectEqual(lexer.TokKind.number, t.kind);
     try std.testing.expectEqualStrings("-123", t.value);
@@ -112,8 +134,13 @@ test "lexer: negative number" {
 test "lexer: float number" {
     const src = "{pi@float}:(3.14)";
     var lx = lexer.Lexer.init(src);
-    _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next(); _ = lx.next();
-    _ = lx.next(); _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
+    _ = lx.next();
     const t = lx.next();
     try std.testing.expectEqual(lexer.TokKind.number, t.kind);
 }
@@ -297,21 +324,21 @@ test "features: compress removes whitespace" {
     try std.testing.expect(std.mem.indexOf(u8, out, "  ") == null);
 }
 
-test "features: json to ason round-trip" {
+test "features: json to asun round-trip" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "{\"name\":\"Alice\",\"age\":30}";
-    const ason_out = try features.jsonToAson(json_src, arena.allocator());
-    try std.testing.expect(ason_out.len > 0);
-    try std.testing.expect(std.mem.indexOf(u8, ason_out, "name") != null);
-    try std.testing.expect(std.mem.indexOf(u8, ason_out, "age") != null);
+    const asun_out = try features.jsonToAsun(json_src, arena.allocator());
+    try std.testing.expect(asun_out.len > 0);
+    try std.testing.expect(std.mem.indexOf(u8, asun_out, "name") != null);
+    try std.testing.expect(std.mem.indexOf(u8, asun_out, "age") != null);
 }
 
-test "features: ason to json" {
+test "features: asun to json" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const src = "{name@str}:(Alice)";
-    const json_out = features.asonToJson(src, arena.allocator()) catch {
+    const json_out = features.asunToJson(src, arena.allocator()) catch {
         // May fail with ParseError if parse is incomplete — that's OK for now
         return;
     };
@@ -373,11 +400,11 @@ test "features: cursor info returns field path and type" {
     try std.testing.expectEqualStrings("$[0].services[0].endpoints[0].port", info.path);
 }
 
-test "features: json array to ason" {
+test "features: json array to asun" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]";
-    const out = try features.jsonToAson(json_src, arena.allocator());
+    const out = try features.jsonToAsun(json_src, arena.allocator());
     try std.testing.expect(out.len > 0);
     // Should contain object-array format markers
     try std.testing.expect(std.mem.indexOf(u8, out, "id") != null);
@@ -475,13 +502,13 @@ test "features: format/compress round-trip array schema" {
     try std.testing.expect(std.mem.indexOf(u8, back, "]:") != null);
 }
 
-test "features: asonToJson array schema top-level" {
+test "features: asunToJson array schema top-level" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const src =
         \\[{name@str,age@int}]:("Alice",30),("Bob",25)
     ;
-    const json = try features.asonToJson(src, arena.allocator());
+    const json = try features.asunToJson(src, arena.allocator());
     // Should produce a JSON array of objects, not empty
     try std.testing.expect(json.len > 2);
     try std.testing.expect(json[0] == '[');
@@ -512,28 +539,28 @@ test "features: inlay hints array schema" {
     try std.testing.expect(found_age);
 }
 
-test "features: asonToJson nested schema object" {
+test "features: asunToJson nested schema object" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const src =
         \\{name@str, addr@{city@str,zip@str}}:
         \\(Alice, (NYC, 10001))
     ;
-    const json = try features.asonToJson(src, arena.allocator());
+    const json = try features.asunToJson(src, arena.allocator());
     try std.testing.expect(std.mem.indexOf(u8, json, "\"name\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, json, "\"addr\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, json, "\"city\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, json, "\"NYC\"") != null);
 }
 
-test "features: asonToJson keeps quoted schema keys as normal JSON keys" {
+test "features: asunToJson keeps quoted schema keys as normal JSON keys" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const src =
         \\{"id uuid"@int,name@str,"65"@bool}:
         \\(1,Alice,true)
     ;
-    const json = try features.asonToJson(src, arena.allocator());
+    const json = try features.asunToJson(src, arena.allocator());
     try std.testing.expectEqualStrings("{\"id uuid\": 1, \"name\": \"Alice\", \"65\": true}", json);
 }
 
@@ -583,53 +610,53 @@ test "features: compress preserves plain array type annotation" {
     try std.testing.expect(std.mem.indexOf(u8, out, "[int]") != null);
 }
 
-test "features: json to ason field names with +/- do not need quoting" {
-    // +, -, _ are now valid ASON identifier characters
+test "features: json to asun field names with +/- do not need quoting" {
+    // +, -, _ are now valid ASUN identifier characters
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "{\"a+b\": \"hello\", \"lowPriorityEIR+CIR\": 42}";
-    const out = try features.jsonToAson(json_src, arena.allocator());
+    const out = try features.jsonToAsun(json_src, arena.allocator());
     // Keys with + should NOT be quoted (they are valid identifiers now)
     try std.testing.expect(std.mem.indexOf(u8, out, "a+b@str") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "lowPriorityEIR+CIR@int") != null);
 }
 
-test "features: json to ason quotes truly special chars in keys" {
+test "features: json to asun quotes truly special chars in keys" {
     // Characters other than [a-zA-Z0-9_+-] must still be quoted
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "{\"a.b\": \"hello\", \"has space\": 42}";
-    const out = try features.jsonToAson(json_src, arena.allocator());
+    const out = try features.jsonToAsun(json_src, arena.allocator());
     try std.testing.expect(std.mem.indexOf(u8, out, "\"a.b\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "\"has space\"") != null);
 }
 
-test "features: json to ason quotes string values containing @" {
+test "features: json to asun quotes string values containing @" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "{\"id uuid\":1,\"@name\":\"@Alice\",\"65\":true}";
-    const out = try features.jsonToAson(json_src, arena.allocator());
+    const out = try features.jsonToAsun(json_src, arena.allocator());
     try std.testing.expect(std.mem.indexOf(u8, out, "\"@name\"@str") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "\"@Alice\"") != null);
 }
 
-test "features: json to ason empty top-level array gets type annotation" {
-    // Bug fix: JSON empty array [] should become [str] in ASON, not []
+test "features: json to asun empty top-level array gets type annotation" {
+    // Bug fix: JSON empty array [] should become [str] in ASUN, not []
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "[]";
-    const out = try features.jsonToAson(json_src, arena.allocator());
+    const out = try features.jsonToAsun(json_src, arena.allocator());
     try std.testing.expectEqualStrings("[str]", out);
 }
 
-test "features: json to ason empty nested array inside object gets type annotation" {
+test "features: json to asun empty nested array inside object gets type annotation" {
     // Bug fix: {"items": []} should produce items@[str], not items@[]
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "{\"name\": \"test\", \"tags\": []}";
-    const out = try features.jsonToAson(json_src, arena.allocator());
+    const out = try features.jsonToAsun(json_src, arena.allocator());
     try std.testing.expect(std.mem.indexOf(u8, out, "tags@[str]") != null or
-                           std.mem.indexOf(u8, out, "tags@ [str]") != null);
+        std.mem.indexOf(u8, out, "tags@ [str]") != null);
 }
 
 test "features: parser accepts field names with plus and minus" {

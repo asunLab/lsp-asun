@@ -16,7 +16,7 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "--stdio") or std.mem.eql(u8, arg, "-stdio")) {
             // stdio mode is always used; flag accepted for LSP client compatibility
         } else if (std.mem.eql(u8, arg, "--version") or std.mem.eql(u8, arg, "-version")) {
-            try std.fs.File.stdout().writeAll("lsp-ason 0.1.0\n");
+            try std.fs.File.stdout().writeAll("lsp-asun 0.1.0\n");
             return;
         } else if (std.mem.eql(u8, arg, "--format") or std.mem.eql(u8, arg, "-format")) {
             const src = try readStdin(alloc);
@@ -35,7 +35,7 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--to-json") or std.mem.eql(u8, arg, "-to-json")) {
             const src = try readStdin(alloc);
             defer alloc.free(src);
-            const out = features.asonToJson(src, alloc) catch |err| {
+            const out = features.asunToJson(src, alloc) catch |err| {
                 std.debug.print("error: {}\n", .{err});
                 std.process.exit(1);
             };
@@ -45,7 +45,7 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--from-json") or std.mem.eql(u8, arg, "-from-json")) {
             const src = try readStdin(alloc);
             defer alloc.free(src);
-            const out = features.jsonToAson(src, alloc) catch |err| {
+            const out = features.jsonToAsun(src, alloc) catch |err| {
                 std.debug.print("error: {}\n", .{err});
                 std.process.exit(1);
             };

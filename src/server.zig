@@ -170,7 +170,7 @@ pub const Server = struct {
             try self.handleSemanticTokens(id, params, a);
         } else if (std.mem.eql(u8, method, "textDocument/inlayHint")) {
             try self.handleInlayHint(id, params, a);
-        } else if (std.mem.eql(u8, method, "ason/cursorInfo")) {
+        } else if (std.mem.eql(u8, method, "asun/cursorInfo")) {
             try self.handleCursorInfo(id, params, a);
         } else if (std.mem.eql(u8, method, "workspace/executeCommand")) {
             try self.handleExecuteCommand(id, params, a);
@@ -220,7 +220,7 @@ pub const Server = struct {
         var result = std.json.ObjectMap.init(a);
         try result.put("capabilities", .{ .object = caps });
         var server_info = std.json.ObjectMap.init(a);
-        try server_info.put("name", .{ .string = "lsp-ason" });
+        try server_info.put("name", .{ .string = "lsp-asun" });
         try server_info.put("version", .{ .string = "0.1.0" });
         try result.put("serverInfo", .{ .object = server_info });
 
@@ -537,8 +537,8 @@ pub const Server = struct {
             break :blk @as([]const u8, "");
         };
 
-        if (std.mem.eql(u8, cmd, "ason.compress")) {
-            // arg0 = URI of an open ASON document
+        if (std.mem.eql(u8, cmd, "asun.compress")) {
+            // arg0 = URI of an open ASUN document
             const doc = self.docs.get(arg0) orelse {
                 try self.sendResult(id, .null, a);
                 return;
@@ -548,24 +548,24 @@ pub const Server = struct {
                 return;
             };
             try self.sendResult(id, .{ .string = out }, a);
-        } else if (std.mem.eql(u8, cmd, "ason.toJSON")) {
-            // arg0 = URI of an open ASON document
+        } else if (std.mem.eql(u8, cmd, "asun.toJSON")) {
+            // arg0 = URI of an open ASUN document
             const doc = self.docs.get(arg0) orelse {
                 try self.sendResult(id, .null, a);
                 return;
             };
-            const out = features.asonToJson(doc.text, a) catch {
+            const out = features.asunToJson(doc.text, a) catch {
                 try self.sendResult(id, .null, a);
                 return;
             };
             try self.sendResult(id, .{ .string = out }, a);
-        } else if (std.mem.eql(u8, cmd, "ason.fromJSON")) {
+        } else if (std.mem.eql(u8, cmd, "asun.fromJSON")) {
             // arg0 = raw JSON text (sent directly by the extension, not a URI)
             if (arg0.len == 0) {
                 try self.sendResult(id, .null, a);
                 return;
             }
-            const out = features.jsonToAson(arg0, a) catch {
+            const out = features.jsonToAsun(arg0, a) catch {
                 try self.sendResult(id, .null, a);
                 return;
             };
@@ -602,7 +602,7 @@ pub const Server = struct {
             const sev: i64 = if (d.severity == .err) 1 else if (d.severity == .warning) 2 else 3;
             try obj.put("severity", .{ .integer = sev });
             try obj.put("message", .{ .string = d.message });
-            try obj.put("source", .{ .string = "lsp-ason" });
+            try obj.put("source", .{ .string = "lsp-asun" });
             try arr.append(.{ .object = obj });
         }
 

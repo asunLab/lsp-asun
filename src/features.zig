@@ -89,11 +89,11 @@ pub const CompItem = struct {
 pub fn complete(root: Node, line: u32, col: u32, alloc: std.mem.Allocator) ![]CompItem {
     const ctx = findContext(root, line, col);
     return switch (ctx) {
-        .schema_type  => typeCompletions(alloc),
+        .schema_type => typeCompletions(alloc),
         .schema_field => schemaKwCompletions(alloc),
-        .data_value   => dataValueCompletions(alloc),
-        .top_level    => topLevelCompletions(alloc),
-        else          => &.{},
+        .data_value => dataValueCompletions(alloc),
+        .top_level => topLevelCompletions(alloc),
+        else => &.{},
     };
 }
 
@@ -102,22 +102,22 @@ const CompCtx = enum { unknown, schema_type, schema_field, data_value, top_level
 fn findContext(root: Node, line: u32, col: u32) CompCtx {
     const n = findNodeAt(root, line, col) orelse return .top_level;
     return switch (n.kind) {
-        .schema      => .schema_field,
-        .field       => .schema_field,
-        .type_annot  => .schema_type,
+        .schema => .schema_field,
+        .field => .schema_field,
+        .type_annot => .schema_type,
         .tuple, .value, .array => .data_value,
-        else         => .top_level,
+        else => .top_level,
     };
 }
 
 fn typeCompletions(alloc: std.mem.Allocator) ![]CompItem {
     const items = &[_]CompItem{
-        .{ .label = "int",     .kind = 14, .detail = "Integer type",           .insert_text = "int" },
-        .{ .label = "float",   .kind = 14, .detail = "Float type",             .insert_text = "float" },
-        .{ .label = "str",     .kind = 14, .detail = "String type",            .insert_text = "str" },
-        .{ .label = "bool",    .kind = 14, .detail = "Boolean type",           .insert_text = "bool" },
-        .{ .label = "{...}",   .kind = 14, .detail = "Nested object schema",   .insert_text = "{$1}" },
-        .{ .label = "[...]",   .kind = 14, .detail = "Array type",             .insert_text = "[$1]" },
+        .{ .label = "int", .kind = 14, .detail = "Integer type", .insert_text = "int" },
+        .{ .label = "float", .kind = 14, .detail = "Float type", .insert_text = "float" },
+        .{ .label = "str", .kind = 14, .detail = "String type", .insert_text = "str" },
+        .{ .label = "bool", .kind = 14, .detail = "Boolean type", .insert_text = "bool" },
+        .{ .label = "{...}", .kind = 14, .detail = "Nested object schema", .insert_text = "{$1}" },
+        .{ .label = "[...]", .kind = 14, .detail = "Array type", .insert_text = "[$1]" },
     };
     const out = try alloc.alloc(CompItem, items.len);
     @memcpy(out, items);
@@ -135,16 +135,16 @@ fn schemaKwCompletions(alloc: std.mem.Allocator) ![]CompItem {
 
 fn dataValueCompletions(alloc: std.mem.Allocator) ![]CompItem {
     const out = try alloc.alloc(CompItem, 2);
-    out[0] = .{ .label = "true",  .kind = 12, .detail = "Boolean true",  .insert_text = "true" };
+    out[0] = .{ .label = "true", .kind = 12, .detail = "Boolean true", .insert_text = "true" };
     out[1] = .{ .label = "false", .kind = 12, .detail = "Boolean false", .insert_text = "false" };
     return out;
 }
 
 fn topLevelCompletions(alloc: std.mem.Allocator) ![]CompItem {
     const out = try alloc.alloc(CompItem, 3);
-    out[0] = .{ .label = "{schema}:(data)",   .kind = 15, .detail = "Single object",  .insert_text = "{$1}:($2)" };
-    out[1] = .{ .label = "[{schema}]:(data)", .kind = 15, .detail = "Object array",   .insert_text = "[{$1}]:($2)" };
-    out[2] = .{ .label = "[values]",          .kind = 15, .detail = "Plain array",    .insert_text = "[$1]" };
+    out[0] = .{ .label = "{schema}:(data)", .kind = 15, .detail = "Single object", .insert_text = "{$1}:($2)" };
+    out[1] = .{ .label = "[{schema}]:(data)", .kind = 15, .detail = "Object array", .insert_text = "[{$1}]:($2)" };
+    out[2] = .{ .label = "[values]", .kind = 15, .detail = "Plain array", .insert_text = "[$1]" };
     return out;
 }
 
@@ -249,8 +249,7 @@ fn emitTrailingComments(anchor: u32, sb: *ArrayList(u8), comments: *CommentCtx) 
 
 fn lastTokenEnd(n: Node) u32 {
     return switch (n.kind) {
-        .field, .schema, .tuple, .array, .array_schema =>
-            if (n.children.len > 0) lastTokenEnd(n.children[n.children.len - 1]) else n.token.end_off,
+        .field, .schema, .tuple, .array, .array_schema => if (n.children.len > 0) lastTokenEnd(n.children[n.children.len - 1]) else n.token.end_off,
         else => n.token.end_off,
     };
 }
@@ -335,7 +334,7 @@ fn nodeWidth(n: Node) isize {
             if (n.children.len > 0) {
                 const c = n.children[0];
                 if (c.kind == .type_annot) {
-            total += 1 + @as(isize, @intCast(c.token.value.len));
+                    total += 1 + @as(isize, @intCast(c.token.value.len));
                 } else if (c.kind == .schema) {
                     const w = nodeWidth(c);
                     if (w < 0) return -1;
@@ -870,9 +869,9 @@ fn spanScore(info: CursorInfo) u64 {
     return line_span + col_span;
 }
 
-// ── ASON → JSON ────────────────────────────────────────────────────────────────
+// ── ASUN → JSON ────────────────────────────────────────────────────────────────
 
-pub fn asonToJson(src: []const u8, alloc: std.mem.Allocator) ![]const u8 {
+pub fn asunToJson(src: []const u8, alloc: std.mem.Allocator) ![]const u8 {
     var result = try parser.parse(src, alloc);
     defer result.deinit();
 
@@ -891,7 +890,10 @@ fn nodeToJson(n: Node, sb: *ArrayList(u8), alloc: std.mem.Allocator, _indent: us
     const w = sb.writer();
     switch (n.kind) {
         .document => {
-            if (n.children.len == 0) { try w.writeAll("null"); return; }
+            if (n.children.len == 0) {
+                try w.writeAll("null");
+                return;
+            }
             const first = n.children[0];
             if (first.kind == .schema or first.kind == .array_schema) {
                 var data_count: usize = 0;
@@ -1033,10 +1035,7 @@ fn valueToJson(t: Token, sb: *ArrayList(u8)) !void {
                 // Output as JSON string
                 try w.writeByte('"');
                 for (v) |c| {
-                    if (c == '"') try w.writeAll("\\\"")
-                    else if (c == '\\') try w.writeAll("\\\\")
-                    else if (c == '\n') try w.writeAll("\\n")
-                    else try w.writeByte(c);
+                    if (c == '"') try w.writeAll("\\\"") else if (c == '\\') try w.writeAll("\\\\") else if (c == '\n') try w.writeAll("\\n") else try w.writeByte(c);
                 }
                 try w.writeByte('"');
             }
@@ -1044,20 +1043,20 @@ fn valueToJson(t: Token, sb: *ArrayList(u8)) !void {
     }
 }
 
-// ── JSON → ASON ────────────────────────────────────────────────────────────────
+// ── JSON → ASUN ────────────────────────────────────────────────────────────────
 
-pub fn jsonToAson(src: []const u8, alloc: std.mem.Allocator) ![]const u8 {
+pub fn jsonToAsun(src: []const u8, alloc: std.mem.Allocator) ![]const u8 {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
     const tmp = arena.allocator();
     const parsed = try std.json.parseFromSlice(std.json.Value, tmp, src, .{});
     defer parsed.deinit();
     var sb = ArrayList(u8).init(tmp);
-    try jsonValueToAson(parsed.value, &sb, tmp);
+    try jsonValueToAsun(parsed.value, &sb, tmp);
     return try alloc.dupe(u8, sb.items);
 }
 
-fn jsonValueToAson(v: std.json.Value, sb: *ArrayList(u8), alloc: std.mem.Allocator) error{OutOfMemory}!void {
+fn jsonValueToAsun(v: std.json.Value, sb: *ArrayList(u8), alloc: std.mem.Allocator) error{OutOfMemory}!void {
     const w = sb.writer();
     switch (v) {
         .null => try w.writeAll(""),
@@ -1068,17 +1067,15 @@ fn jsonValueToAson(v: std.json.Value, sb: *ArrayList(u8), alloc: std.mem.Allocat
             if (needsQuote(s)) {
                 try w.writeByte('"');
                 for (s) |c| {
-                    if (c == '"') try w.writeAll("\\\"")
-                    else if (c == '\\') try w.writeAll("\\\\")
-                    else try w.writeByte(c);
+                    if (c == '"') try w.writeAll("\\\"") else if (c == '\\') try w.writeAll("\\\\") else try w.writeByte(c);
                 }
                 try w.writeByte('"');
             } else {
                 try w.writeAll(s);
             }
         },
-        .object => |obj| try jsonObjectToAson(obj, sb, alloc),
-        .array => |arr| try jsonArrayToAson(arr.items, sb, alloc),
+        .object => |obj| try jsonObjectToAsun(obj, sb, alloc),
+        .array => |arr| try jsonArrayToAsun(arr.items, sb, alloc),
         .number_string => |s| try w.writeAll(s),
     }
 }
@@ -1098,7 +1095,7 @@ fn sortedKeys(obj: std.json.ObjectMap, alloc: std.mem.Allocator) error{OutOfMemo
 
 const FieldPair = struct { schema: []const u8, data: []const u8 };
 
-fn jsonObjectToAson(obj: std.json.ObjectMap, sb: *ArrayList(u8), alloc: std.mem.Allocator) error{OutOfMemory}!void {
+fn jsonObjectToAsun(obj: std.json.ObjectMap, sb: *ArrayList(u8), alloc: std.mem.Allocator) error{OutOfMemory}!void {
     const w = sb.writer();
     if (obj.count() == 0) {
         try w.writeAll("{}:()");
@@ -1106,7 +1103,7 @@ fn jsonObjectToAson(obj: std.json.ObjectMap, sb: *ArrayList(u8), alloc: std.mem.
     }
     const keys = try sortedKeys(obj, alloc);
     var schema_parts = ArrayList(u8).init(alloc);
-    var data_parts   = ArrayList(u8).init(alloc);
+    var data_parts = ArrayList(u8).init(alloc);
     const sw = schema_parts.writer();
     const dw = data_parts.writer();
 
@@ -1116,23 +1113,38 @@ fn jsonObjectToAson(obj: std.json.ObjectMap, sb: *ArrayList(u8), alloc: std.mem.
             try sw.writeAll(",");
             try dw.writeAll(",");
         }
-        const pair = try jsonFieldToAson(k, val, alloc);
+        const pair = try jsonFieldToAsun(k, val, alloc);
         try sw.writeAll(pair.schema);
         try dw.writeAll(pair.data);
     }
     try w.print("{{{s}}}:({s})", .{ schema_parts.items, data_parts.items });
 }
 
-fn jsonFieldToAson(key: []const u8, val: std.json.Value, alloc: std.mem.Allocator) error{OutOfMemory}!FieldPair {
+fn jsonFieldToAsun(key: []const u8, val: std.json.Value, alloc: std.mem.Allocator) error{OutOfMemory}!FieldPair {
     var s = ArrayList(u8).init(alloc);
     var d = ArrayList(u8).init(alloc);
     const sw = s.writer();
     const dw = d.writer();
     switch (val) {
-        .null   => { try writeFieldName(sw, key); try sw.writeAll("@str"); },
-        .bool   => |b| { try writeFieldName(sw, key); try sw.writeAll("@bool"); try dw.writeAll(if (b) "true" else "false"); },
-        .integer => |i| { try writeFieldName(sw, key); try sw.writeAll("@int"); try dw.print("{d}", .{i}); },
-        .float  => |f| { try writeFieldName(sw, key); try sw.writeAll("@float"); try dw.print("{d}", .{f}); },
+        .null => {
+            try writeFieldName(sw, key);
+            try sw.writeAll("@str");
+        },
+        .bool => |b| {
+            try writeFieldName(sw, key);
+            try sw.writeAll("@bool");
+            try dw.writeAll(if (b) "true" else "false");
+        },
+        .integer => |i| {
+            try writeFieldName(sw, key);
+            try sw.writeAll("@int");
+            try dw.print("{d}", .{i});
+        },
+        .float => |f| {
+            try writeFieldName(sw, key);
+            try sw.writeAll("@float");
+            try dw.print("{d}", .{f});
+        },
         .string => |str| {
             try writeFieldName(sw, key);
             try sw.writeAll("@str");
@@ -1152,7 +1164,7 @@ fn jsonFieldToAson(key: []const u8, val: std.json.Value, alloc: std.mem.Allocato
             const ks = try sortedKeys(obj, alloc);
             for (ks, 0..) |ik, i| {
                 const iv = obj.get(ik) orelse .null;
-                const p2 = try jsonFieldToAson(ik, iv, alloc);
+                const p2 = try jsonFieldToAsun(ik, iv, alloc);
                 if (i > 0) {
                     try inner_s.writer().writeAll(",");
                     try inner_d.writer().writeAll(",");
@@ -1161,7 +1173,7 @@ fn jsonFieldToAson(key: []const u8, val: std.json.Value, alloc: std.mem.Allocato
                 try inner_d.writer().writeAll(p2.data);
             }
             try writeFieldName(sw, key);
-            try sw.print("@{{{s}}}", .{ inner_s.items });
+            try sw.print("@{{{s}}}", .{inner_s.items});
             try dw.print("({s})", .{inner_d.items});
         },
         .array => |arr| {
@@ -1173,12 +1185,12 @@ fn jsonFieldToAson(key: []const u8, val: std.json.Value, alloc: std.mem.Allocato
                         var inner_s = ArrayList(u8).init(alloc);
                         for (ks, 0..) |ik, i| {
                             const iv = first_obj.get(ik) orelse .null;
-                            const p2 = try jsonFieldToAson(ik, iv, alloc);
+                            const p2 = try jsonFieldToAsun(ik, iv, alloc);
                             if (i > 0) try inner_s.writer().writeAll(",");
                             try inner_s.writer().writeAll(p2.schema);
                         }
                         try writeFieldName(sw, key);
-                        try sw.print("@[{{{s}}}]", .{ inner_s.items });
+                        try sw.print("@[{{{s}}}]", .{inner_s.items});
                         // data: array of tuples
                         var dat = ArrayList(u8).init(alloc);
                         try dat.writer().writeAll("[");
@@ -1189,13 +1201,13 @@ fn jsonFieldToAson(key: []const u8, val: std.json.Value, alloc: std.mem.Allocato
                                     var td = ArrayList(u8).init(alloc);
                                     for (ks, 0..) |ik, kIdx| {
                                         const iv = eobj.get(ik) orelse .null;
-                                        const p2 = try jsonFieldToAson(ik, iv, alloc);
+                                        const p2 = try jsonFieldToAsun(ik, iv, alloc);
                                         if (kIdx > 0) try td.writer().writeAll(",");
                                         try td.writer().writeAll(p2.data);
                                     }
                                     try dat.writer().print("({s})", .{td.items});
                                 },
-                                else => try jsonValueToAson(elem, &dat, alloc),
+                                else => try jsonValueToAsun(elem, &dat, alloc),
                             }
                         }
                         try dat.writer().writeAll("]");
@@ -1208,24 +1220,31 @@ fn jsonFieldToAson(key: []const u8, val: std.json.Value, alloc: std.mem.Allocato
             // plain array
             const elem_type = inferArrayType(items);
             try writeFieldName(sw, key);
-            try sw.print("@[{s}]", .{ elem_type });
+            try sw.print("@[{s}]", .{elem_type});
             var elems = ArrayList(u8).init(alloc);
             try elems.writer().writeAll("[");
             for (items, 0..) |elem, i| {
                 if (i > 0) try elems.writer().writeAll(",");
-                try jsonValueToAson(elem, &elems, alloc);
+                try jsonValueToAsun(elem, &elems, alloc);
             }
             try elems.writer().writeAll("]");
             try dw.writeAll(elems.items);
         },
-        .number_string => |ns| { try writeFieldName(sw, key); try sw.writeAll("@str"); try dw.writeAll(ns); },
+        .number_string => |ns| {
+            try writeFieldName(sw, key);
+            try sw.writeAll("@str");
+            try dw.writeAll(ns);
+        },
     }
     return FieldPair{ .schema = try s.toOwnedSlice(), .data = try d.toOwnedSlice() };
 }
 
-fn jsonArrayToAson(items: []std.json.Value, sb: *ArrayList(u8), alloc: std.mem.Allocator) error{OutOfMemory}!void {
+fn jsonArrayToAsun(items: []std.json.Value, sb: *ArrayList(u8), alloc: std.mem.Allocator) error{OutOfMemory}!void {
     const w = sb.writer();
-    if (items.len == 0) { try w.writeAll("[str]"); return; }
+    if (items.len == 0) {
+        try w.writeAll("[str]");
+        return;
+    }
     // Array of objects → object-array format
     if (items[0] == .object) {
         const first_obj = items[0].object;
@@ -1234,7 +1253,7 @@ fn jsonArrayToAson(items: []std.json.Value, sb: *ArrayList(u8), alloc: std.mem.A
         var schema_parts = ArrayList(u8).init(alloc);
         for (keys, 0..) |k, i| {
             const iv = first_obj.get(k) orelse .null;
-            const p2 = try jsonFieldToAson(k, iv, alloc);
+            const p2 = try jsonFieldToAsun(k, iv, alloc);
             if (i > 0) try schema_parts.writer().writeAll(",");
             try schema_parts.writer().writeAll(p2.schema);
         }
@@ -1261,7 +1280,7 @@ fn jsonArrayToAson(items: []std.json.Value, sb: *ArrayList(u8), alloc: std.mem.A
     try w.writeAll("[");
     for (items, 0..) |elem, i| {
         if (i > 0) try w.writeAll(",");
-        try jsonValueToAson(elem, sb, alloc);
+        try jsonValueToAsun(elem, sb, alloc);
     }
     try w.writeAll("]");
 }
@@ -1278,9 +1297,7 @@ fn writeValueData(val: std.json.Value, w: anytype, alloc: std.mem.Allocator) err
             if (needsQuote(s)) {
                 try w.writeByte('"');
                 for (s) |c| {
-                    if (c == '"') try w.writeAll("\\\"")
-                    else if (c == '\\') try w.writeAll("\\\\")
-                    else try w.writeByte(c);
+                    if (c == '"') try w.writeAll("\\\"") else if (c == '\\') try w.writeAll("\\\\") else try w.writeByte(c);
                 }
                 try w.writeByte('"');
             } else {
@@ -1321,7 +1338,7 @@ fn writeValueData(val: std.json.Value, w: anytype, alloc: std.mem.Allocator) err
                 for (arr.items, 0..) |elem, i| {
                     if (i > 0) try w.writeAll(",");
                     var tmp = ArrayList(u8).init(alloc);
-                    try jsonValueToAson(elem, &tmp, alloc);
+                    try jsonValueToAsun(elem, &tmp, alloc);
                     try w.writeAll(tmp.items);
                 }
                 try w.writeAll("]");
@@ -1335,10 +1352,10 @@ fn inferArrayType(items: []std.json.Value) []const u8 {
     if (items.len == 0) return "str";
     switch (items[0]) {
         .integer => return "int",
-        .float   => return "float",
-        .bool    => return "bool",
-        .string  => return "str",
-        else     => return "str",
+        .float => return "float",
+        .bool => return "bool",
+        .string => return "str",
+        else => return "str",
     }
 }
 
@@ -1352,13 +1369,13 @@ fn needsQuote(s: []const u8) bool {
     return false;
 }
 
-/// Check if a JSON key needs quoting to be a valid ASON field name.
-/// ASON identifiers allow [a-zA-Z0-9_+-].
+/// Check if a JSON key needs quoting to be a valid ASUN field name.
+/// ASUN identifiers allow [a-zA-Z0-9_+-].
 fn needsKeyQuote(s: []const u8) bool {
     if (s.len == 0) return true;
     for (s) |c| {
         const ok = (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
-                   (c >= '0' and c <= '9') or c == '_' or c == '+' or c == '-';
+            (c >= '0' and c <= '9') or c == '_' or c == '+' or c == '-';
         if (!ok) return true;
     }
     return false;
@@ -1369,9 +1386,11 @@ fn writeFieldName(w: anytype, key: []const u8) !void {
     if (needsKeyQuote(key)) {
         try w.writeByte('"');
         for (key) |c| {
-            if (c == '"') { try w.writeAll("\\\""); }
-            else if (c == '\\') { try w.writeAll("\\\\"); }
-            else try w.writeByte(c);
+            if (c == '"') {
+                try w.writeAll("\\\"");
+            } else if (c == '\\') {
+                try w.writeAll("\\\\");
+            } else try w.writeByte(c);
         }
         try w.writeByte('"');
     } else {
@@ -1391,7 +1410,7 @@ fn findNodeAtRecurse(n: Node, line: u32, col: u32, best: *?Node) void {
     const t = n.token;
     const start_ok = t.line < line or (t.line == line and t.col <= col);
     // Use the token itself as end (approximation)
-    const end_ok   = t.end_line > line or (t.end_line == line and t.end_col >= col);
+    const end_ok = t.end_line > line or (t.end_line == line and t.end_col >= col);
     if (start_ok and end_ok) best.* = n;
     for (n.children) |c| findNodeAtRecurse(c, line, col, best);
 }

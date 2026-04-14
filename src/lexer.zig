@@ -1,5 +1,5 @@
-//! Lexer — tokenises ASON source.
-//! Matches the token set from the Go ason-lsp implementation.
+//! Lexer — tokenises ASUN source.
+//! Matches the token set from the Go asun-lsp implementation.
 
 const std = @import("std");
 const ArrayList = std.array_list.Managed;
@@ -7,23 +7,23 @@ const ArrayList = std.array_list.Managed;
 // ── Token types ────────────────────────────────────────────────────────────────
 
 pub const TokKind = enum(u8) {
-    lbrace,    // {
-    rbrace,    // }
-    lparen,    // (
-    rparen,    // )
-    lbracket,  // [
-    rbracket,  // ]
-    colon,     // :
-    at,        // @
-    comma,     // ,
-    ident,     // field name
+    lbrace, // {
+    rbrace, // }
+    lparen, // (
+    rparen, // )
+    lbracket, // [
+    rbracket, // ]
+    colon, // :
+    at, // @
+    comma, // ,
+    ident, // field name
     type_hint, // int str float bool
-    string,    // "..."
-    number,    // integer or float literal
-    bool_val,  // true / false
+    string, // "..."
+    number, // integer or float literal
+    bool_val, // true / false
     plain_str, // unquoted value token
-    comment,   // /* ... */
-    newline,   // \n
+    comment, // /* ... */
+    newline, // \n
     eof,
     err,
 };
@@ -31,8 +31,8 @@ pub const TokKind = enum(u8) {
 pub const Token = struct {
     kind: TokKind,
     value: []const u8, // slice into source
-    line: u32,         // 0-based
-    col: u32,          // 0-based byte col
+    line: u32, // 0-based
+    col: u32, // 0-based byte col
     end_line: u32,
     end_col: u32,
     offset: u32,
@@ -95,8 +95,7 @@ pub const Lexer = struct {
     pub fn next(self: *Lexer) Token {
         self.skipWsNoNl();
         if (self.pos >= self.src.len) {
-            return .{ .kind = .eof, .value = "", .line = self.line, .col = self.col,
-                       .end_line = self.line, .end_col = self.col, .offset = self.pos, .end_off = self.pos };
+            return .{ .kind = .eof, .value = "", .line = self.line, .col = self.col, .end_line = self.line, .end_col = self.col, .offset = self.pos, .end_off = self.pos };
         }
 
         const start = self.pos;
@@ -115,15 +114,44 @@ pub const Lexer = struct {
         }
 
         switch (b) {
-            '{' => { self.advance(1); self.in_schema = true;  return self.tok(.lbrace,   start, sl, sc); },
-            '}' => { self.advance(1);                         return self.tok(.rbrace,   start, sl, sc); },
-            '(' => { self.advance(1); self.in_schema = false; return self.tok(.lparen,   start, sl, sc); },
-            ')' => { self.advance(1);                         return self.tok(.rparen,   start, sl, sc); },
-            '[' => { self.advance(1);                         return self.tok(.lbracket, start, sl, sc); },
-            ']' => { self.advance(1);                         return self.tok(.rbracket, start, sl, sc); },
-            ':' => { self.advance(1);                         return self.tok(.colon,    start, sl, sc); },
-            '@' => { self.advance(1);                         return self.tok(.at,       start, sl, sc); },
-            ',' => { self.advance(1);                         return self.tok(.comma,    start, sl, sc); },
+            '{' => {
+                self.advance(1);
+                self.in_schema = true;
+                return self.tok(.lbrace, start, sl, sc);
+            },
+            '}' => {
+                self.advance(1);
+                return self.tok(.rbrace, start, sl, sc);
+            },
+            '(' => {
+                self.advance(1);
+                self.in_schema = false;
+                return self.tok(.lparen, start, sl, sc);
+            },
+            ')' => {
+                self.advance(1);
+                return self.tok(.rparen, start, sl, sc);
+            },
+            '[' => {
+                self.advance(1);
+                return self.tok(.lbracket, start, sl, sc);
+            },
+            ']' => {
+                self.advance(1);
+                return self.tok(.rbracket, start, sl, sc);
+            },
+            ':' => {
+                self.advance(1);
+                return self.tok(.colon, start, sl, sc);
+            },
+            '@' => {
+                self.advance(1);
+                return self.tok(.at, start, sl, sc);
+            },
+            ',' => {
+                self.advance(1);
+                return self.tok(.comma, start, sl, sc);
+            },
             '"' => return self.lexString(start, sl, sc),
             else => {},
         }
@@ -163,7 +191,7 @@ pub const Lexer = struct {
 
     fn isIdentChar(c: u8) bool {
         return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
-               (c >= '0' and c <= '9') or c == '_' or c == '+' or c == '-';
+            (c >= '0' and c <= '9') or c == '_' or c == '+' or c == '-';
     }
 
     fn lexSchemaWord(self: *Lexer, start: u32, sl: u32, sc: u32) Token {
