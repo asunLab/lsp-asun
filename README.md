@@ -2,7 +2,7 @@
 
 `lsp-asun` is the Zig-based language server for ASUN. It also acts as the shared runtime for editor-facing utilities such as formatting, compression, and ASUN/JSON conversion.
 
-It follows the current ASUN syntax: scalar type hints use `@`, complex fields keep `@{...}` / `@[...]`, and legacy map syntax is rejected.
+It follows the current ASUN syntax: scalar type hints use `@`, and complex fields keep `@{...}` / `@[...]`.
 
 ## What It Does
 

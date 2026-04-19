@@ -151,10 +151,10 @@ const Parser = struct {
                 try children.append(row);
             }
         } else if (self.cur.kind == .lbracket and self.peekInsideBracket() == .lbrace) {
-            // Array schema: [{field:type, ...}]:(data tuples)
+            // Array schema: [{field@type, ...}]:(data tuples)
             self.eat(); // consume [
             self.eatNl();
-            const inner = try self.parseTypeAnnot(); // parses {field:type...}
+            const inner = try self.parseTypeAnnot(); // parses {field@type...}
             _ = self.expect(.rbracket);
             var ch_arr = try self.alloc.alloc(Node, 1);
             ch_arr[0] = inner;
@@ -216,10 +216,6 @@ const Parser = struct {
         }
         self.eat(); // consume ident or quoted string
         self.eatNl();
-        if (self.cur.kind == .colon) {
-            self.diag("legacy ':' type annotations are not supported; use '@'", .{}, self.cur);
-            self.eat();
-        }
         if (self.cur.kind == .at) {
             self.eat();
             const ta = try self.parseTypeAnnot();

@@ -206,10 +206,10 @@ test "parser: array type annotation" {
     try std.testing.expectEqual(@as(usize, 0), result.diags.len);
 }
 
-test "parser: legacy map type annotation rejected" {
+test "parser: invalid schema type rejected" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var result = try parser.parse("{data@<str:int>}:(<a:1>)", arena.allocator());
+    var result = try parser.parse("{data@dict}:(value)", arena.allocator());
     defer result.deinit();
     try std.testing.expect(result.diags.len > 0);
 }
