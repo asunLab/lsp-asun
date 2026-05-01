@@ -854,9 +854,24 @@ fn nodeSpan(node: Node) Span {
 }
 
 fn pickCursorInfo(infos: []const CursorInfo, line: u32, col: u32) ?CursorInfo {
+    // Require that some collected span actually starts or ends on the
+    // clicked line. This rejects clicks on comment-only / blank interior
+    // lines of a multi-line container — those lines are within the
+    // container's span but contain no real value, so we should return
+    // nothing instead of surfacing the enclosing container.
+    var has_line_anchor = false;
+    for (infos) |info| {
+        if (info.line == line or info.end_line == line) {
+            has_line_anchor = true;
+            break;
+        }
+    }
+    if (!has_line_anchor) return null;
+
     var best_exact: ?CursorInfo = null;
     var best_exact_score: u64 = std.math.maxInt(u64);
     var best_line: ?CursorInfo = null;
+    var best_line_distance: u64 = std.math.maxInt(u64);
     var best_line_score: u64 = std.math.maxInt(u64);
 
     for (infos) |info| {
@@ -866,14 +881,29 @@ fn pickCursorInfo(infos: []const CursorInfo, line: u32, col: u32) ?CursorInfo {
                 best_exact = info;
                 best_exact_score = score;
             }
-        } else if (line >= info.line and line <= info.end_line) {
-            if (score <= best_line_score) {
+        } else if (line == info.line or line == info.end_line) {
+            const distance = lineDistance(info, line, col);
+            if (distance < best_line_distance or (distance == best_line_distance and score <= best_line_score)) {
                 best_line = info;
+                best_line_distance = distance;
                 best_line_score = score;
             }
         }
     }
-    return best_exact orelse best_line;
+    if (best_exact) |exact| {
+        if (best_line) |line_match| {
+            if (best_line_score < best_exact_score) return line_match;
+        }
+        return exact;
+    }
+    return best_line;
+}
+
+fn lineDistance(info: CursorInfo, line: u32, col: u32) u64 {
+    if (info.line != line or info.end_line != line) return 0;
+    if (col < info.col) return @as(u64, info.col - col);
+    if (col > info.end_col) return @as(u64, col - info.end_col);
+    return 0;
 }
 
 fn spanContains(info: CursorInfo, line: u32, col: u32) bool {

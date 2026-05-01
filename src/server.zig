@@ -509,6 +509,8 @@ pub const Server = struct {
         try obj.put(a, "type", .{ .string = info.?.type_label });
         try obj.put(a, "line", .{ .integer = @intCast(info.?.line) });
         try obj.put(a, "character", .{ .integer = @intCast(info.?.col) });
+        try obj.put(a, "endLine", .{ .integer = @intCast(info.?.end_line) });
+        try obj.put(a, "endCharacter", .{ .integer = @intCast(info.?.end_col) });
         try self.sendResult(id, .{ .object = obj }, a);
     }
 

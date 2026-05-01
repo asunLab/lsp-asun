@@ -426,6 +426,22 @@ test "features: cursor info returns field path and type" {
     try std.testing.expectEqualStrings("$[0].services[0].endpoints[0].port", info.path);
 }
 
+test "features: cursor info prefers field value near tuple delimiters" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const src = "[{id,name,score,passed}]:(1,Alice,95.5,true),(2,Bob,82.0,true)";
+    var presult = try parser.parse(src, arena.allocator());
+    defer presult.deinit();
+
+    const name_info = (try features.cursorInfo(presult.root, 0, 51, arena.allocator())).?;
+    try std.testing.expectEqualStrings("str", name_info.type_label);
+    try std.testing.expectEqualStrings("$[1].name", name_info.path);
+
+    const score_info = (try features.cursorInfo(presult.root, 0, 56, arena.allocator())).?;
+    try std.testing.expectEqualStrings("float", score_info.type_label);
+    try std.testing.expectEqualStrings("$[1].score", score_info.path);
+}
+
 test "features: json array to asun" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
