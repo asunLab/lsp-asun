@@ -79,9 +79,7 @@ const Analyzer = struct {
             const ok = (ch >= 'a' and ch <= 'z') or
                        (ch >= 'A' and ch <= 'Z') or
                        (ch >= '0' and ch <= '9') or
-                       ch == '_' or
-                       ch == '+' or
-                       ch == '-';
+                       ch == '_';
             if (!ok) {
                 self.addDiag(.{
                     .message = std.fmt.allocPrint(

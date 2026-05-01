@@ -35,7 +35,7 @@ VS Code 插件当前会通过 `workspace/executeCommand` 调用这些命令：
 
 ## 环境要求
 
-- Zig `0.15.0` 或更高版本
+- Zig `0.16.0` 或更高版本
 
 最低 Zig 版本来自 `build.zig.zon`。
 

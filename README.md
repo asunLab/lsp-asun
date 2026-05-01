@@ -35,7 +35,7 @@ The custom commands used by the VS Code extension are:
 
 ## Requirements
 
-- Zig `0.15.0` or newer
+- Zig `0.16.0` or newer
 
 The minimum Zig version comes from `build.zig.zon`.
 

@@ -84,10 +84,10 @@ export fn asun_complete(src_ptr: [*]const u8, src_len: usize, line: u32, col: u3
     var result = parser.parse(src, alloc()) catch return 0;
     defer result.deinit();
     const items = features.complete(result.root, line, col, alloc()) catch return 0;
-    var fbs = std.io.fixedBufferStream(&out_buf);
-    const w = fbs.writer();
+    var offset: usize = 0;
     for (items) |it| {
-        w.print("{s}\n", .{it.label}) catch break;
+        const written = std.fmt.bufPrint(out_buf[offset..], "{s}\n", .{it.label}) catch break;
+        offset += written.len;
     }
-    return fbs.getWritten().len;
+    return offset;
 }

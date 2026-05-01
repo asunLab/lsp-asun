@@ -37,8 +37,8 @@ pub const NodeKind = enum {
 
 pub const Node = struct {
     kind: NodeKind,
-    token: Token,           // primary token
-    children: []Node,       // owned by arena
+    token: Token, // primary token
+    children: []Node, // owned by arena
     // Typed fields overlaid via kind:
     // .field  → children[0] = type_annot / schema / array_schema when present
     // .schema → children = fields
@@ -126,6 +126,12 @@ const Parser = struct {
         return .{ .kind = kind, .token = token, .children = children };
     }
 
+    fn emptyValueNode(self: *Parser, token: Token) Node {
+        var t = token;
+        t.value = "";
+        return self.mkNode(.value, t, self.noChildren());
+    }
+
     fn noChildren(self: *Parser) []Node {
         _ = self;
         return &.{};
@@ -199,7 +205,10 @@ const Parser = struct {
         self.eatNl();
         var fields = ArrayList(Node).init(self.alloc);
         while (self.cur.kind != .rbrace and self.cur.kind != .eof) {
-            if (self.cur.kind == .newline or self.cur.kind == .comma) { self.eat(); continue; }
+            if (self.cur.kind == .newline or self.cur.kind == .comma) {
+                self.eat();
+                continue;
+            }
             const f = try self.parseField();
             try fields.append(f);
         }
@@ -274,10 +283,22 @@ const Parser = struct {
         self.eat(); // (
         self.eatNl();
         var vals = ArrayList(Node).init(self.alloc);
+        var prev_sep = true;
         while (self.cur.kind != .rparen and self.cur.kind != .eof) {
-            if (self.cur.kind == .newline or self.cur.kind == .comma) { self.eat(); continue; }
+            if (self.cur.kind == .newline) {
+                self.eat();
+                continue;
+            }
+            if (self.cur.kind == .comma) {
+                const comma = self.cur;
+                if (prev_sep) try vals.append(self.emptyValueNode(comma));
+                prev_sep = true;
+                self.eat();
+                continue;
+            }
             const v = try self.parseValue();
             try vals.append(v);
+            prev_sep = false;
         }
         _ = self.expect(.rparen);
         return self.mkNode(.tuple, tok, try vals.toOwnedSlice());
@@ -288,10 +309,22 @@ const Parser = struct {
         self.eat(); // [
         self.eatNl();
         var vals = ArrayList(Node).init(self.alloc);
+        var prev_sep = true;
         while (self.cur.kind != .rbracket and self.cur.kind != .eof) {
-            if (self.cur.kind == .newline or self.cur.kind == .comma) { self.eat(); continue; }
+            if (self.cur.kind == .newline) {
+                self.eat();
+                continue;
+            }
+            if (self.cur.kind == .comma) {
+                const comma = self.cur;
+                if (prev_sep) try vals.append(self.emptyValueNode(comma));
+                prev_sep = true;
+                self.eat();
+                continue;
+            }
             const v = try self.parseValue();
             try vals.append(v);
+            prev_sep = false;
         }
         _ = self.expect(.rbracket);
         return self.mkNode(.array, tok, try vals.toOwnedSlice());

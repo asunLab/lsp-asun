@@ -191,7 +191,7 @@ pub const Lexer = struct {
 
     fn isIdentChar(c: u8) bool {
         return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or
-            (c >= '0' and c <= '9') or c == '_' or c == '+' or c == '-';
+            (c >= '0' and c <= '9') or c == '_';
     }
 
     fn lexSchemaWord(self: *Lexer, start: u32, sl: u32, sc: u32) Token {
@@ -226,7 +226,7 @@ pub const Lexer = struct {
             self.advance(1);
         }
         const raw = self.src[start..self.pos];
-        const trimmed = std.mem.trimRight(u8, raw, " \t");
+        const trimmed = std.mem.trimEnd(u8, raw, " \t");
         if (trimmed.len == 0) return self.tok(.plain_str, start, sl, sc);
         if (std.mem.eql(u8, trimmed, "true") or std.mem.eql(u8, trimmed, "false"))
             return self.tok(.bool_val, start, sl, sc);
@@ -256,6 +256,13 @@ pub fn isNumber(s: []const u8) bool {
         i += 1;
         if (i >= s.len or s[i] < '0' or s[i] > '9') return false;
         while (i < s.len and s[i] >= '0' and s[i] <= '9') i += 1;
+    }
+    if (i < s.len and (s[i] == 'e' or s[i] == 'E')) {
+        i += 1;
+        if (i < s.len and (s[i] == '-' or s[i] == '+')) i += 1;
+        const exp_start = i;
+        while (i < s.len and s[i] >= '0' and s[i] <= '9') i += 1;
+        if (i == exp_start) return false;
     }
     return i == s.len;
 }

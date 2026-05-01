@@ -35,18 +35,20 @@ const Document = struct {
 
 pub const Server = struct {
     alloc: std.mem.Allocator,
+    io: std.Io,
     initialized: bool = false,
     docs: std.StringHashMap(Document),
-    in: std.fs.File,
-    out: std.fs.File,
+    in: std.Io.File,
+    out: std.Io.File,
     shutdown_requested: bool = false,
 
-    pub fn init(alloc: std.mem.Allocator) Server {
+    pub fn init(alloc: std.mem.Allocator, io: std.Io) Server {
         return .{
             .alloc = alloc,
+            .io = io,
             .docs = std.StringHashMap(Document).init(alloc),
-            .in = std.fs.File.stdin(),
-            .out = std.fs.File.stdout(),
+            .in = std.Io.File.stdin(),
+            .out = std.Io.File.stdout(),
         };
     }
 
@@ -62,13 +64,14 @@ pub const Server = struct {
     // ── I/O ──────────────────────────────────────────────────────────────────
 
     fn readMessage(self: *Server, arena: std.mem.Allocator) !?[]const u8 {
-        var reader = self.in.deprecatedReader();
+        var read_buf: [4096]u8 = undefined;
+        var file_reader = self.in.readerStreaming(self.io, &read_buf);
+        var reader = &file_reader.interface;
         // Read headers
         var content_len: usize = 0;
-        var buf: [512]u8 = undefined;
         while (true) {
-            const line = reader.readUntilDelimiter(&buf, '\n') catch return null;
-            const trimmed = std.mem.trimRight(u8, line, "\r");
+            const line = (try reader.takeDelimiter('\n')) orelse return null;
+            const trimmed = std.mem.trimEnd(u8, line, "\r");
             if (trimmed.len == 0) break; // blank line after headers
             if (std.mem.startsWith(u8, trimmed, "Content-Length:")) {
                 const val = std.mem.trim(u8, trimmed["Content-Length:".len..], " \t");
@@ -77,43 +80,46 @@ pub const Server = struct {
         }
         if (content_len == 0) return null;
         const body = try arena.alloc(u8, content_len);
-        try reader.readNoEof(body);
+        try reader.readSliceAll(body);
         return body;
     }
 
     fn sendRaw(self: *Server, body: []const u8) !void {
         var hdr_buf: [64]u8 = undefined;
         const hdr = try std.fmt.bufPrint(&hdr_buf, "Content-Length: {d}\r\n\r\n", .{body.len});
-        try self.out.writeAll(hdr);
-        try self.out.writeAll(body);
+        try std.Io.File.writeStreamingAll(self.out, self.io, hdr);
+        try std.Io.File.writeStreamingAll(self.out, self.io, body);
     }
 
     fn sendResult(self: *Server, id: std.json.Value, result: std.json.Value, arena: std.mem.Allocator) !void {
-        var map = std.json.ObjectMap.init(arena);
-        try map.put("jsonrpc", .{ .string = "2.0" });
-        try map.put("id", id);
-        try map.put("result", result);
+        const a = arena;
+        var map = try std.json.ObjectMap.init(arena, &.{}, &.{});
+        try map.put(a, "jsonrpc", .{ .string = "2.0" });
+        try map.put(a, "id", id);
+        try map.put(a, "result", result);
         const body = try std.json.Stringify.valueAlloc(arena, std.json.Value{ .object = map }, .{});
         try self.sendRaw(body);
     }
 
     fn sendError(self: *Server, id: std.json.Value, code: i32, msg: []const u8, arena: std.mem.Allocator) !void {
-        var err_map = std.json.ObjectMap.init(arena);
-        try err_map.put("code", .{ .integer = code });
-        try err_map.put("message", .{ .string = msg });
-        var map = std.json.ObjectMap.init(arena);
-        try map.put("jsonrpc", .{ .string = "2.0" });
-        try map.put("id", id);
-        try map.put("error", .{ .object = err_map });
+        const a = arena;
+        var err_map = try std.json.ObjectMap.init(arena, &.{}, &.{});
+        try err_map.put(a, "code", .{ .integer = code });
+        try err_map.put(a, "message", .{ .string = msg });
+        var map = try std.json.ObjectMap.init(arena, &.{}, &.{});
+        try map.put(a, "jsonrpc", .{ .string = "2.0" });
+        try map.put(a, "id", id);
+        try map.put(a, "error", .{ .object = err_map });
         const body = try std.json.Stringify.valueAlloc(arena, std.json.Value{ .object = map }, .{});
         try self.sendRaw(body);
     }
 
     fn sendNotification(self: *Server, method: []const u8, params: std.json.Value, arena: std.mem.Allocator) !void {
-        var map = std.json.ObjectMap.init(arena);
-        try map.put("jsonrpc", .{ .string = "2.0" });
-        try map.put("method", .{ .string = method });
-        try map.put("params", params);
+        const a = arena;
+        var map = try std.json.ObjectMap.init(arena, &.{}, &.{});
+        try map.put(a, "jsonrpc", .{ .string = "2.0" });
+        try map.put(a, "method", .{ .string = method });
+        try map.put(a, "params", params);
         const body = try std.json.Stringify.valueAlloc(arena, std.json.Value{ .object = map }, .{});
         try self.sendRaw(body);
     }
@@ -186,43 +192,43 @@ pub const Server = struct {
         _ = _params;
         self.initialized = true;
         // Build capabilities
-        var caps = std.json.ObjectMap.init(a);
+        var caps = try std.json.ObjectMap.init(a, &.{}, &.{});
 
         // TextDocumentSync=1 (full)
-        try caps.put("textDocumentSync", .{ .integer = 1 });
+        try caps.put(a, "textDocumentSync", .{ .integer = 1 });
 
         // Completion
-        var comp_obj = std.json.ObjectMap.init(a);
+        var comp_obj = try std.json.ObjectMap.init(a, &.{}, &.{});
         var triggers = std.json.Array.init(a);
         for ([_][]const u8{ ":", "{", "[", "(", "," }) |t| {
             try triggers.append(.{ .string = t });
         }
-        try comp_obj.put("triggerCharacters", .{ .array = triggers });
-        try caps.put("completionProvider", .{ .object = comp_obj });
+        try comp_obj.put(a, "triggerCharacters", .{ .array = triggers });
+        try caps.put(a, "completionProvider", .{ .object = comp_obj });
 
-        try caps.put("hoverProvider", .{ .bool = true });
-        try caps.put("documentFormattingProvider", .{ .bool = true });
-        try caps.put("inlayHintProvider", .{ .bool = true });
+        try caps.put(a, "hoverProvider", .{ .bool = true });
+        try caps.put(a, "documentFormattingProvider", .{ .bool = true });
+        try caps.put(a, "inlayHintProvider", .{ .bool = true });
 
         // SemanticTokens — full only
-        var sem_obj = std.json.ObjectMap.init(a);
-        var sem_legend = std.json.ObjectMap.init(a);
+        var sem_obj = try std.json.ObjectMap.init(a, &.{}, &.{});
+        var sem_legend = try std.json.ObjectMap.init(a, &.{}, &.{});
         var tok_types = std.json.Array.init(a);
         for ([_][]const u8{ "keyword", "type", "variable", "string", "number", "comment", "operator", "parameter" }) |t| {
             try tok_types.append(.{ .string = t });
         }
-        try sem_legend.put("tokenTypes", .{ .array = tok_types });
-        try sem_legend.put("tokenModifiers", .{ .array = std.json.Array.init(a) });
-        try sem_obj.put("legend", .{ .object = sem_legend });
-        try sem_obj.put("full", .{ .bool = true });
-        try caps.put("semanticTokensProvider", .{ .object = sem_obj });
+        try sem_legend.put(a, "tokenTypes", .{ .array = tok_types });
+        try sem_legend.put(a, "tokenModifiers", .{ .array = std.json.Array.init(a) });
+        try sem_obj.put(a, "legend", .{ .object = sem_legend });
+        try sem_obj.put(a, "full", .{ .bool = true });
+        try caps.put(a, "semanticTokensProvider", .{ .object = sem_obj });
 
-        var result = std.json.ObjectMap.init(a);
-        try result.put("capabilities", .{ .object = caps });
-        var server_info = std.json.ObjectMap.init(a);
-        try server_info.put("name", .{ .string = "lsp-asun" });
-        try server_info.put("version", .{ .string = "0.1.0" });
-        try result.put("serverInfo", .{ .object = server_info });
+        var result = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try result.put(a, "capabilities", .{ .object = caps });
+        var server_info = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try server_info.put(a, "name", .{ .string = "lsp-asun" });
+        try server_info.put(a, "version", .{ .string = "0.1.0" });
+        try result.put(a, "serverInfo", .{ .object = server_info });
 
         try self.sendResult(id, .{ .object = result }, a);
     }
@@ -321,11 +327,11 @@ pub const Server = struct {
             break :blk text;
         };
 
-        var contents = std.json.ObjectMap.init(a);
-        try contents.put("kind", .{ .string = "markdown" });
-        try contents.put("value", .{ .string = hover_text });
-        var result = std.json.ObjectMap.init(a);
-        try result.put("contents", .{ .object = contents });
+        var contents = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try contents.put(a, "kind", .{ .string = "markdown" });
+        try contents.put(a, "value", .{ .string = hover_text });
+        var result = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try result.put(a, "contents", .{ .object = contents });
 
         try self.sendResult(id, .{ .object = result }, a);
     }
@@ -344,11 +350,11 @@ pub const Server = struct {
         const items = try features.complete(presult.root, pos.line, pos.col, a);
         var arr = std.json.Array.init(a);
         for (items) |item| {
-            var obj = std.json.ObjectMap.init(a);
-            try obj.put("label", .{ .string = item.label });
-            try obj.put("kind", .{ .integer = @intCast(item.kind) });
-            try obj.put("detail", .{ .string = item.detail });
-            try obj.put("insertText", .{ .string = item.insert_text });
+            var obj = try std.json.ObjectMap.init(a, &.{}, &.{});
+            try obj.put(a, "label", .{ .string = item.label });
+            try obj.put(a, "kind", .{ .integer = @intCast(item.kind) });
+            try obj.put(a, "detail", .{ .string = item.detail });
+            try obj.put(a, "insertText", .{ .string = item.insert_text });
             try arr.append(.{ .object = obj });
         }
         try self.sendResult(id, .{ .array = arr }, a);
@@ -367,20 +373,20 @@ pub const Server = struct {
         };
 
         // Return as a single "replace everything" text edit
-        var edit = std.json.ObjectMap.init(a);
-        var range = std.json.ObjectMap.init(a);
-        var start = std.json.ObjectMap.init(a);
-        try start.put("line", .{ .integer = 0 });
-        try start.put("character", .{ .integer = 0 });
-        var end_pos = std.json.ObjectMap.init(a);
+        var edit = try std.json.ObjectMap.init(a, &.{}, &.{});
+        var range = try std.json.ObjectMap.init(a, &.{}, &.{});
+        var start = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try start.put(a, "line", .{ .integer = 0 });
+        try start.put(a, "character", .{ .integer = 0 });
+        var end_pos = try std.json.ObjectMap.init(a, &.{}, &.{});
         // Count lines in original
         const line_count = std.mem.count(u8, doc.text, "\n");
-        try end_pos.put("line", .{ .integer = @intCast(line_count + 1) });
-        try end_pos.put("character", .{ .integer = 0 });
-        try range.put("start", .{ .object = start });
-        try range.put("end", .{ .object = end_pos });
-        try edit.put("range", .{ .object = range });
-        try edit.put("newText", .{ .string = formatted });
+        try end_pos.put(a, "line", .{ .integer = @intCast(line_count + 1) });
+        try end_pos.put(a, "character", .{ .integer = 0 });
+        try range.put(a, "start", .{ .object = start });
+        try range.put(a, "end", .{ .object = end_pos });
+        try edit.put(a, "range", .{ .object = range });
+        try edit.put(a, "newText", .{ .string = formatted });
         var arr = std.json.Array.init(a);
         try arr.append(.{ .object = edit });
         try self.sendResult(id, .{ .array = arr }, a);
@@ -451,8 +457,8 @@ pub const Server = struct {
 
         var arr = std.json.Array.init(a);
         for (data.items) |v| try arr.append(.{ .integer = v });
-        var result = std.json.ObjectMap.init(a);
-        try result.put("data", .{ .array = arr });
+        var result = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try result.put(a, "data", .{ .array = arr });
         try self.sendResult(id, .{ .object = result }, a);
     }
 
@@ -469,13 +475,13 @@ pub const Server = struct {
         const hints = try features.inlayHints(presult.root, a);
         var arr = std.json.Array.init(a);
         for (hints) |h| {
-            var obj = std.json.ObjectMap.init(a);
-            var pos = std.json.ObjectMap.init(a);
-            try pos.put("line", .{ .integer = @intCast(h.line) });
-            try pos.put("character", .{ .integer = @intCast(h.col) });
-            try obj.put("position", .{ .object = pos });
-            try obj.put("label", .{ .string = h.label });
-            try obj.put("kind", .{ .integer = 1 }); // Type
+            var obj = try std.json.ObjectMap.init(a, &.{}, &.{});
+            var pos = try std.json.ObjectMap.init(a, &.{}, &.{});
+            try pos.put(a, "line", .{ .integer = @intCast(h.line) });
+            try pos.put(a, "character", .{ .integer = @intCast(h.col) });
+            try obj.put(a, "position", .{ .object = pos });
+            try obj.put(a, "label", .{ .string = h.label });
+            try obj.put(a, "kind", .{ .integer = 1 }); // Type
             try arr.append(.{ .object = obj });
         }
         try self.sendResult(id, .{ .array = arr }, a);
@@ -498,11 +504,11 @@ pub const Server = struct {
             return;
         }
 
-        var obj = std.json.ObjectMap.init(a);
-        try obj.put("path", .{ .string = info.?.path });
-        try obj.put("type", .{ .string = info.?.type_label });
-        try obj.put("line", .{ .integer = @intCast(info.?.line) });
-        try obj.put("character", .{ .integer = @intCast(info.?.col) });
+        var obj = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try obj.put(a, "path", .{ .string = info.?.path });
+        try obj.put(a, "type", .{ .string = info.?.type_label });
+        try obj.put(a, "line", .{ .integer = @intCast(info.?.line) });
+        try obj.put(a, "character", .{ .integer = @intCast(info.?.col) });
         try self.sendResult(id, .{ .object = obj }, a);
     }
 
@@ -588,27 +594,27 @@ pub const Server = struct {
 
         var arr = std.json.Array.init(a);
         for (all_diags.items) |d| {
-            var obj = std.json.ObjectMap.init(a);
-            var range = std.json.ObjectMap.init(a);
-            var start = std.json.ObjectMap.init(a);
-            var end_p = std.json.ObjectMap.init(a);
-            try start.put("line", .{ .integer = @intCast(d.line) });
-            try start.put("character", .{ .integer = @intCast(d.col) });
-            try end_p.put("line", .{ .integer = @intCast(d.end_line) });
-            try end_p.put("character", .{ .integer = @intCast(d.end_col) });
-            try range.put("start", .{ .object = start });
-            try range.put("end", .{ .object = end_p });
-            try obj.put("range", .{ .object = range });
+            var obj = try std.json.ObjectMap.init(a, &.{}, &.{});
+            var range = try std.json.ObjectMap.init(a, &.{}, &.{});
+            var start = try std.json.ObjectMap.init(a, &.{}, &.{});
+            var end_p = try std.json.ObjectMap.init(a, &.{}, &.{});
+            try start.put(a, "line", .{ .integer = @intCast(d.line) });
+            try start.put(a, "character", .{ .integer = @intCast(d.col) });
+            try end_p.put(a, "line", .{ .integer = @intCast(d.end_line) });
+            try end_p.put(a, "character", .{ .integer = @intCast(d.end_col) });
+            try range.put(a, "start", .{ .object = start });
+            try range.put(a, "end", .{ .object = end_p });
+            try obj.put(a, "range", .{ .object = range });
             const sev: i64 = if (d.severity == .err) 1 else if (d.severity == .warning) 2 else 3;
-            try obj.put("severity", .{ .integer = sev });
-            try obj.put("message", .{ .string = d.message });
-            try obj.put("source", .{ .string = "lsp-asun" });
+            try obj.put(a, "severity", .{ .integer = sev });
+            try obj.put(a, "message", .{ .string = d.message });
+            try obj.put(a, "source", .{ .string = "lsp-asun" });
             try arr.append(.{ .object = obj });
         }
 
-        var notif_params = std.json.ObjectMap.init(a);
-        try notif_params.put("uri", .{ .string = uri });
-        try notif_params.put("diagnostics", .{ .array = arr });
+        var notif_params = try std.json.ObjectMap.init(a, &.{}, &.{});
+        try notif_params.put(a, "uri", .{ .string = uri });
+        try notif_params.put(a, "diagnostics", .{ .array = arr });
         try self.sendNotification("textDocument/publishDiagnostics", .{ .object = notif_params }, a);
     }
 };

@@ -2,6 +2,6 @@
     .name = .asun_zig_lsp,
     .fingerprint = 0x6d602b697913d343,
     .version = "0.1.0",
-    .minimum_zig_version = "0.15.0",
+    .minimum_zig_version = "0.16.0",
     .paths = .{"."},
 }

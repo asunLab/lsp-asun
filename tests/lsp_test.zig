@@ -145,6 +145,17 @@ test "lexer: float number" {
     try std.testing.expectEqual(lexer.TokKind.number, t.kind);
 }
 
+test "lexer: exponent number" {
+    const src = "[1e100, 1.5e-3]";
+    var lx = lexer.Lexer.init(src);
+    _ = lx.next(); // [
+    const big = lx.next();
+    try std.testing.expectEqual(lexer.TokKind.number, big.kind);
+    _ = lx.next(); // ,
+    const small = lx.next();
+    try std.testing.expectEqual(lexer.TokKind.number, small.kind);
+}
+
 test "lexer: array bracket tokens" {
     const src = "[1, 2, 3]";
     var lx = lexer.Lexer.init(src);
@@ -287,6 +298,21 @@ test "parser: plain array" {
     try std.testing.expectEqual(parser.NodeKind.document, result.root.kind);
     try std.testing.expect(result.root.children.len > 0);
     try std.testing.expectEqual(parser.NodeKind.array, result.root.children[0].kind);
+}
+
+test "parser: empty array elements are null values" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var result = try parser.parse("[,,,]", arena.allocator());
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 0), result.diags.len);
+    const arr = result.root.children[0];
+    try std.testing.expectEqual(parser.NodeKind.array, arr.kind);
+    try std.testing.expectEqual(@as(usize, 3), arr.children.len);
+    for (arr.children) |child| {
+        try std.testing.expectEqual(parser.NodeKind.value, child.kind);
+        try std.testing.expectEqualStrings("", child.token.value);
+    }
 }
 
 // ── Features tests ────────────────────────────────────────────────────────────
@@ -610,19 +636,17 @@ test "features: compress preserves plain array type annotation" {
     try std.testing.expect(std.mem.indexOf(u8, out, "[int]") != null);
 }
 
-test "features: json to asun field names with +/- do not need quoting" {
-    // +, -, _ are now valid ASUN identifier characters
+test "features: json to asun quotes field names with plus" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "{\"a+b\": \"hello\", \"lowPriorityEIR+CIR\": 42}";
     const out = try features.jsonToAsun(json_src, arena.allocator());
-    // Keys with + should NOT be quoted (they are valid identifiers now)
-    try std.testing.expect(std.mem.indexOf(u8, out, "a+b@str") != null);
-    try std.testing.expect(std.mem.indexOf(u8, out, "lowPriorityEIR+CIR@int") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"a+b\"@str") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"lowPriorityEIR+CIR\"@int") != null);
 }
 
 test "features: json to asun quotes truly special chars in keys" {
-    // Characters other than [a-zA-Z0-9_+-] must still be quoted
+    // Characters other than [a-zA-Z0-9_] must still be quoted
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const json_src = "{\"a.b\": \"hello\", \"has space\": 42}";
@@ -659,15 +683,34 @@ test "features: json to asun empty nested array inside object gets type annotati
         std.mem.indexOf(u8, out, "tags@ [str]") != null);
 }
 
-test "features: parser accepts field names with plus and minus" {
-    // Field names like a+b and x-y should parse without errors
+test "features: json to asun quotes scalar lookalike strings" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const json_src = "[\"1\",\"0.5\",\"1e10\",\"true\",\"/* x */\"]";
+    const out = try features.jsonToAsun(json_src, arena.allocator());
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"1\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"0.5\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"1e10\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"true\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"/* x */\"") != null);
+}
+
+test "features: json to asun escapes control strings and preserves trailing null arrays" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const json_src = "[\"a\\nb\", null]";
+    const out = try features.jsonToAsun(json_src, arena.allocator());
+    try std.testing.expect(std.mem.indexOf(u8, out, "\"a\\nb\"") != null);
+    try std.testing.expect(std.mem.endsWith(u8, out, ",]"));
+}
+
+test "features: parser rejects unquoted field names with plus and minus" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const src = "{a+b@str, x-y@int}:(hello, 42)";
     var result = try parser.parse(src, arena.allocator());
     defer result.deinit();
-    // Should not have parse errors
-    try std.testing.expectEqual(@as(usize, 0), result.diags.len);
+    try std.testing.expect(result.diags.len > 0);
 }
 
 test "features: parser still accepts quoted field names" {
@@ -680,12 +723,21 @@ test "features: parser still accepts quoted field names" {
     try std.testing.expectEqual(@as(usize, 0), result.diags.len);
 }
 
-test "lexer: identifiers with plus and minus" {
-    // + and - should be valid identifier characters in schema context
+test "lexer: identifiers stop before plus and minus" {
     var lex = lexer.Lexer.init("{lowPriorityEIR+CIR@str}");
-    // skip '{'
     _ = lex.next();
     const tok = lex.next();
     try std.testing.expectEqual(lexer.TokKind.ident, tok.kind);
-    try std.testing.expectEqualStrings("lowPriorityEIR+CIR", tok.value);
+    try std.testing.expectEqualStrings("lowPriorityEIR", tok.value);
+}
+
+test "lexer: plain strings may contain slash except comment opener" {
+    var lex = lexer.Lexer.init("[path/to/file,/* comment */x]");
+    _ = lex.next(); // [
+    const path = lex.next();
+    try std.testing.expectEqual(lexer.TokKind.plain_str, path.kind);
+    try std.testing.expectEqualStrings("path/to/file", path.value);
+    _ = lex.next(); // ,
+    const comment = lex.next();
+    try std.testing.expectEqual(lexer.TokKind.comment, comment.kind);
 }
